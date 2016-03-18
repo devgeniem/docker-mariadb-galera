@@ -1,0 +1,28 @@
+[mysqld]
+
+query_cache_size=0
+
+binlog_format=row
+
+default-storage-engine=innodb
+
+innodb_autoinc_lock_mode=2
+
+query_cache_type=0
+
+bind-address=0.0.0.0
+skip-name-resolve
+
+# Galera Provider Configuration
+wsrep_provider=/usr/lib/galera/libgalera_smm.so
+
+# Galera Cluster Configuration
+wsrep_cluster_name="%%CLUSTER_NAME%%"
+wsrep_cluster_address="gcomm://%%CLUSTER_MEMBERS%%"
+
+# Galera Synchronization Congifuration
+wsrep_sst_method=rsync
+
+# Galera Node Configuration
+wsrep_node_address="%%NODE_ADDRESS%%"
+wsrep_node_name="%%NODE_NAME%%"
