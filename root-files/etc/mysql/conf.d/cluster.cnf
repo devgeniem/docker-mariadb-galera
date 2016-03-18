@@ -20,7 +20,7 @@ wsrep_provider=/usr/lib/galera/libgalera_smm.so
 wsrep_cluster_name="%%CLUSTER_NAME%%"
 wsrep_cluster_address="gcomm://%%CLUSTER_MEMBERS%%"
 
-# Galera Synchronization Congifuration
+# Galera Replicating method
 wsrep_sst_method=rsync
 
 # Galera Node Configuration
