@@ -26,3 +26,6 @@ wsrep_sst_method=rsync
 # Galera Node Configuration
 wsrep_node_address="%%NODE_ADDRESS%%"
 wsrep_node_name="%%NODE_NAME%%"
+
+# Turn on Galera
+wsrep_on=ON

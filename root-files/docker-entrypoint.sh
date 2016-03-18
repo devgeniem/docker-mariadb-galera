@@ -22,6 +22,21 @@ for arg; do
   esac
 done
 
+# Replace galera configs if docker gave as any envs
+GCONFIG=/etc/mysql/conf.d/cluster.cnf
+
+# Set defaults if they are not set
+export NODE_ADDRESS=${NODE_ADDRESS:-$(get_ip)}
+export NODE_NAME=${NODE_NAME:-$(hostname)}
+export CLUSTER_NAME=${CLUSTER_NAME:-Galera}
+export CLUSTER_MEMBERS=${CLUSTER_MEMBERS:-$NODE_ADDRESS} # Server is so lonely :(
+
+# Replace configs
+sed -i "s|%%NODE_ADDRESS%%|$NODE_ADDRESS|g" $GCONFIG
+sed -i "s|%%NODE_NAME%%|$NODE_NAME|g" $GCONFIG
+sed -i "s|%%CLUSTER_NAME%%|$CLUSTER_NAME|g" $GCONFIG
+sed -i "s|%%CLUSTER_MEMBERS%%|$CLUSTER_MEMBERS|g" $GCONFIG
+
 # Run pre-mysqld scripts
 if [ "$1" = 'mysqld' -a -z "$wantHelp" ]; then
   # Get config
@@ -46,6 +61,14 @@ if [ "$1" = 'mysqld' -a -z "$wantHelp" ]; then
     pid="$!"
 
     mysql=( mysql --protocol=socket -uroot )
+
+    # TODO: Everything works for a moment with:
+    # docker run --name some-mariadb -e MYSQL_ROOT_PASSWORD=my-secret-pw -d onnimonni/mariadb-galera mysqld --wsrep-new-cluster
+    # docker run --name some-mariadb2 -e MYSQL_ROOT_PASSWORD=my-secret-pw -e CLUSTER_MEMBERS=172.17.0.12 -d onnimonni/mariadb-galera mysqld --wsrep_cluster_address=gcomm://172.17.0.12
+
+    # Then joining nodes will stop because of for loop.
+    # Only boostrapping node should continue after this:
+    # I think i will use consul to orchestrate which node should bootstrap and which should join
 
     for i in {30..0}; do
       if echo 'SELECT 1' | "${mysql[@]}" &> /dev/null; then
@@ -132,20 +155,5 @@ EOSQL
   chown -R mysql:mysql "$DATADIR"
   echo "Starting mysql process..."
 fi
-
-# Replace galera configs if docker gave as any envs
-GCONFIG=/etc/mysql/conf.d/cluster.cnf
-
-# Set defaults if they are not set
-export NODE_ADDRESS=${NODE_ADDRESS:-$(get_ip)}
-export NODE_NAME=${NODE_NAME:-$(hostname)}
-export CLUSTER_NAME=${CLUSTER_NAME:-Galera}
-export CLUSTER_MEMBERS=${CLUSTER_MEMBERS:-$NODE_ADDRESS} # Server is so lonely :(
-
-# Replace configs
-sed -i "s|%%NODE_ADDRESS%%|$NODE_ADDRESS|g" $GCONFIG
-sed -i "s|%%NODE_NAME%%|$NODE_NAME|g" $GCONFIG
-sed -i "s|%%CLUSTER_NAME%%|$CLUSTER_NAME|g" $GCONFIG
-sed -i "s|%%CLUSTER_MEMBERS%%|$CLUSTER_MEMBERS|g" $GCONFIG
 
 exec "$@"
