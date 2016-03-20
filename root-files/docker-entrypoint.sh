@@ -6,6 +6,28 @@ function get_ip() {
   ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1
 }
 
+# Check if remote mysql accepts connections
+# @param $1 - remote mysql ip
+# @return 0 | 1 - Returns boolean
+function check_mysql_up() {
+  local host=$1
+  mysqladmin -h$host --password=$MYSQL_ROOT_PASSWORD ping > /dev/null 2>&1
+  return $?
+}
+
+function init_database() {
+  # Get config
+  local DATADIR="$(mysqld --verbose --help --log-bin-index=`mktemp -u` 2>/dev/null | awk '$1 == "datadir" { print $2; exit }')"
+  if [ ! -d "$DATADIR/mysql" ]; then
+    mkdir -p "$DATADIR"
+    chown -R mysql:mysql "$DATADIR"
+
+    echo 'Initializing database'
+    mysql_install_db --user=mysql --datadir="$DATADIR" --rpm
+    echo 'Database initialized'
+  fi
+}
+
 # if command starts with an option, prepend mysqld
 if [ "${1:0:1}" = '-' ]; then
   set -- mysqld "$@"
@@ -29,13 +51,50 @@ GCONFIG=/etc/mysql/conf.d/cluster.cnf
 export NODE_ADDRESS=${NODE_ADDRESS:-$(get_ip)}
 export NODE_NAME=${NODE_NAME:-$(hostname)}
 export CLUSTER_NAME=${CLUSTER_NAME:-Galera}
-export CLUSTER_MEMBERS=${CLUSTER_MEMBERS:-$NODE_ADDRESS} # Server is so lonely :(
 
 # Replace configs
 sed -i "s|%%NODE_ADDRESS%%|$NODE_ADDRESS|g" $GCONFIG
 sed -i "s|%%NODE_NAME%%|$NODE_NAME|g" $GCONFIG
 sed -i "s|%%CLUSTER_NAME%%|$CLUSTER_NAME|g" $GCONFIG
-sed -i "s|%%CLUSTER_MEMBERS%%|$CLUSTER_MEMBERS|g" $GCONFIG
+
+# Check if this node has any open remote mysql servers to connect
+if [ -z "$CLUSTER_MEMBERS" ]; then
+  sed -i "s|%%CLUSTER_MEMBERS%%|$NODE_NAME|g" $GCONFIG
+else
+
+  # If this node knows any others add them to the config
+  sed -i "s|%%CLUSTER_MEMBERS%%|$CLUSTER_MEMBERS|g" $GCONFIG
+
+  # Try to connect to any open node
+  while : ; do
+    echo "---> Checking if anybody else is alive..."
+    # Test connections to each node
+    for ip in $(echo $CLUSTER_MEMBERS | sed "s/,/ /g")
+    do
+        # call your procedure/other scripts here below
+        if check_mysql_up $ip; then
+          # Start joiner process
+          init_database
+          exec "$@"
+          return $?
+        else
+          echo "---> ERROR: $ip is not up..."
+        fi
+    done
+
+    # If this is the bootstrap node break here
+    [[ "$BOOTSTRAP" == "on" ]] && break
+
+    # Otherwise wait for the bootstrapping node
+    sleep 5
+  done
+fi
+
+##
+# This is the basic mariadb startup script
+##
+
+echo "---> Bootstrapping the $CLUSTER_NAME cluster..."
 
 # Run pre-mysqld scripts
 if [ "$1" = 'mysqld' -a -z "$wantHelp" ]; then
@@ -57,7 +116,12 @@ if [ "$1" = 'mysqld' -a -z "$wantHelp" ]; then
     echo 'Database initialized'
 
     # Start mysqld process
-    "$@" --skip-networking &
+    #Allow this to be run as normal mariadb too
+    if [ "$BOOTSTRAP" = "on" ]; then
+      "$@" --wsrep-new-cluster --skip-networking &
+    else
+      "$@" --skip-networking &
+    fi
     pid="$!"
 
     mysql=( mysql --protocol=socket -uroot )
@@ -156,4 +220,9 @@ EOSQL
   echo "Starting mysql process..."
 fi
 
-exec "$@"
+# Allow this to be run as normal mariadb too
+if [ "$BOOTSTRAP" = "on" ]; then
+  exec "$@" "--wsrep-new-cluster"
+else
+  exec "$@"
+fi

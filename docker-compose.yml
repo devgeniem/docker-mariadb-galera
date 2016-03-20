@@ -1,0 +1,12 @@
+bootstrap:
+  build: .
+  environment:
+    MYSQL_ROOT_PASSWORD: password
+    CLUSTER_MEMBERS: 172.17.0.13
+    BOOTSTRAP: "on"
+
+joiner:
+  build: .
+  environment:
+    MYSQL_ROOT_PASSWORD: password
+    CLUSTER_MEMBERS: 172.17.0.12,172.17.0.13
