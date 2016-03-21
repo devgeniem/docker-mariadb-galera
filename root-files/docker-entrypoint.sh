@@ -44,6 +44,11 @@ for arg; do
   esac
 done
 
+# Clear files which stayed because of network failure and may cause problems
+if [ -f /var/mysql/lib/rsync_sst.pid ] ; then
+    rm /var/mysql/lib/rsync_sst.pid
+fi
+
 # Replace galera configs if docker gave as any envs
 GCONFIG=/etc/mysql/conf.d/cluster.cnf
 
