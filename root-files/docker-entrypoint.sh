@@ -62,6 +62,10 @@ sed -i "s|%%NODE_ADDRESS%%|$NODE_ADDRESS|g" $GCONFIG
 sed -i "s|%%NODE_NAME%%|$NODE_NAME|g" $GCONFIG
 sed -i "s|%%CLUSTER_NAME%%|$CLUSTER_NAME|g" $GCONFIG
 
+# Replace debian.cnf
+sed -i "s|^user.*|user     = root|g" /etc/mysql/debian.cnf
+sed -i "s|^password.*|password = $MYSQL_ROOT_PASSWORD|g" /etc/mysql/debian.cnf
+
 # Check if this node has any open remote mysql servers to connect
 if [ -z "$CLUSTER_MEMBERS" ]; then
   sed -i "s|%%CLUSTER_MEMBERS%%|$NODE_NAME|g" $GCONFIG

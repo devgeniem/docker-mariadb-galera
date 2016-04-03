@@ -1,21 +1,38 @@
 [mysqld]
 
-query_cache_size=0
+# Bind to all interfaces but use firewall to block outsiders
+bind-address=0.0.0.0
 
-binlog_format=row
+# Save some performance by not resolving client addresses
+skip-name-resolve
+
+binlog_format=ROW
 
 default-storage-engine=innodb
-
+# Use only InnoDB because MyISAM won't work with clusterized galera
+enforce_storage_engine=InnoDB
 innodb_autoinc_lock_mode=2
-
-query_cache_type=0
-query_cache_size=0
+innodb_buffer_pool_size=1024M
+innodb_buffer_pool_instances=1
 
 # source: https://mariadb.com/kb/en/mariadb/xtradbinnodb-server-system-variables/#innodb_flush_log_at_trx_commit
 innodb_flush_log_at_trx_commit=2
 
-bind-address=0.0.0.0
-skip-name-resolve
+##
+# Enable query caching
+##
+query_cache_type=1
+query_cache_limit=256K
+query_cache_min_res_unit=2k
+query_cache_size=100M
+
+##
+# Tmp cache configurations
+##
+max_heap_table_size=64M
+tmp_table_size=64M
+
+thread_pool_size=24
 
 # Galera Provider Configuration
 wsrep_provider=/usr/lib/galera/libgalera_smm.so
