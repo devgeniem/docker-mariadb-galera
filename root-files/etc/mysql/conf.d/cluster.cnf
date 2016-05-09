@@ -6,16 +6,20 @@ bind-address=0.0.0.0
 # Save some performance by not resolving client addresses
 skip-name-resolve
 
+# This is mandatory setting in galera cluster
 binlog_format=ROW
-
-default-storage-engine=innodb
-# Use only InnoDB because MyISAM won't work with clusterized galera
-enforce_storage_engine=InnoDB
 innodb_autoinc_lock_mode=2
-innodb_buffer_pool_size=1024M
+
+# Use only InnoDB because MyISAM won't work with clusterized galera
+default-storage-engine=innodb
+enforce_storage_engine=InnoDB
+
+# InnoDB performance tweaks
+innodb_buffer_pool_size=512M
 innodb_buffer_pool_instances=1
 
-# source: https://mariadb.com/kb/en/mariadb/xtradbinnodb-server-system-variables/#innodb_flush_log_at_trx_commit
+# Only write data once per second. Performance is slightly better,
+# but a error or power outage can cause the last second's transactions to be lost.
 innodb_flush_log_at_trx_commit=2
 
 ##
@@ -37,12 +41,16 @@ thread_pool_size=24
 # Galera Provider Configuration
 wsrep_provider=/usr/lib/galera/libgalera_smm.so
 
+# With bigger gcache size we can use ist to recover instead of sst
+wsrep_provider_options="gcache.size = 512M"
+
 # Galera Cluster Configuration
 wsrep_cluster_name="%%CLUSTER_NAME%%"
 wsrep_cluster_address="gcomm://%%CLUSTER_MEMBERS%%"
 
-# Galera Replicating method
-wsrep_sst_method=rsync
+# Use Percona xtrabackup for Galera Replicating method
+wsrep_sst_method=xtrabackup
+wsrep_sst_auth="%%SST_AUTH%%"
 
 # Galera Node Configuration
 wsrep_node_address="%%NODE_ADDRESS%%"

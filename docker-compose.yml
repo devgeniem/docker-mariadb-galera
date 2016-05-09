@@ -2,11 +2,14 @@ bootstrap:
   build: .
   environment:
     MYSQL_ROOT_PASSWORD: password
-    CLUSTER_MEMBERS: 172.17.0.13
+    SST_USER: xtrabackup
+    SST_PASSWORD: xtrabackup
     BOOTSTRAP: "on"
 
 joiner:
   build: .
   environment:
     MYSQL_ROOT_PASSWORD: password
-    CLUSTER_MEMBERS: 172.17.0.12,172.17.0.13
+    SST_USER: xtrabackup
+    SST_PASSWORD: xtrabackup
+    CLUSTER_MEMBERS: 172.17.0.19

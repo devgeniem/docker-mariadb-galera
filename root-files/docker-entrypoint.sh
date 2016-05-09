@@ -56,6 +56,7 @@ GCONFIG=/etc/mysql/conf.d/cluster.cnf
 export NODE_ADDRESS=${NODE_ADDRESS:-$(get_ip)}
 export NODE_NAME=${NODE_NAME:-$(hostname)}
 export CLUSTER_NAME=${CLUSTER_NAME:-Galera}
+export SST_USER=${CLUSTER_NAME:-xtrabackup}
 
 # Replace configs
 sed -i "s|%%NODE_ADDRESS%%|$NODE_ADDRESS|g" $GCONFIG
@@ -66,9 +67,19 @@ sed -i "s|%%CLUSTER_NAME%%|$CLUSTER_NAME|g" $GCONFIG
 sed -i "s|^user.*|user     = root|g" /etc/mysql/debian.cnf
 sed -i "s|^password.*|password = $MYSQL_ROOT_PASSWORD|g" /etc/mysql/debian.cnf
 
-# Check if this node has any open remote mysql servers to connect
+# Set auth for xtrabackup sst
+if [ "$SST_USER" == "" ] || [ "$SST_PASSWORD" == "" ]; then
+  echo "ERROR: You need to set SST_USER and SST_PASSWORD..."
+  exit 1
+else
+  sed -i "s|%%SST_AUTH%%|$SST_USER:$SST_PASSWORD|g" $GCONFIG
+fi
+
+# If CLUSTER_MEMBERS is empty just use empty list
+# TODO: track nodes which connected to this node at some point so we can try to reconnect
+# after power outage or failure
 if [ -z "$CLUSTER_MEMBERS" ]; then
-  sed -i "s|%%CLUSTER_MEMBERS%%|$NODE_NAME|g" $GCONFIG
+  sed -i "s|%%CLUSTER_MEMBERS%%||g" $GCONFIG
 else
 
   # If this node knows any others add them to the config
@@ -125,7 +136,7 @@ if [ "$1" = 'mysqld' -a -z "$wantHelp" ]; then
     echo 'Database initialized'
 
     # Start mysqld process
-    #Allow this to be run as normal mariadb too
+    # Allow this to be run as normal mariadb too
     if [ "$BOOTSTRAP" = "on" ]; then
       "$@" --wsrep-new-cluster --skip-networking &
     else
@@ -134,14 +145,6 @@ if [ "$1" = 'mysqld' -a -z "$wantHelp" ]; then
     pid="$!"
 
     mysql=( mysql --protocol=socket -uroot )
-
-    # TODO: Everything works for a moment with:
-    # docker run --name some-mariadb -e MYSQL_ROOT_PASSWORD=my-secret-pw -d onnimonni/mariadb-galera mysqld --wsrep-new-cluster
-    # docker run --name some-mariadb2 -e MYSQL_ROOT_PASSWORD=my-secret-pw -e CLUSTER_MEMBERS=172.17.0.12 -d onnimonni/mariadb-galera mysqld --wsrep_cluster_address=gcomm://172.17.0.12
-
-    # Then joining nodes will stop because of for loop.
-    # Only boostrapping node should continue after this:
-    # I think i will use consul to orchestrate which node should bootstrap and which should join
 
     for i in {30..0}; do
       if echo 'SELECT 1' | "${mysql[@]}" &> /dev/null; then
@@ -194,12 +197,22 @@ EOSQL
       mysql+=( "$MYSQL_DATABASE" )
     fi
 
+    if [ "$SST_USER" != "" ] && [ "$SST_PASSWORD" != "" ]; then
+      echo "CREATE USER '$SST_USER'@'%' IDENTIFIED BY '$SST_PASSWORD' ;" | "${mysql[@]}"
+      echo "GRANT ALL ON *.* TO '$SST_USER'@'%' ;" | "${mysql[@]}"
+    fi
+
     if [ "$MYSQL_USER" -a "$MYSQL_PASSWORD" ]; then
       echo "CREATE USER '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_PASSWORD' ;" | "${mysql[@]}"
 
       if [ "$MYSQL_DATABASE" ]; then
         echo "GRANT ALL ON \`$MYSQL_DATABASE\`.* TO '$MYSQL_USER'@'%' ;" | "${mysql[@]}"
       fi
+
+      # When using skip-name-resolve we will get unneccesary noise in logs:
+      # [Warning] 'proxies_priv' entry '@% root@076d53fc38aa' ignored in --skip-name-resolve mode.
+      # This removes all proxies_priv entries
+      echo 'TRUNCATE mysql.proxies_priv;' | "${mysql[@]}"
 
       echo 'FLUSH PRIVILEGES ;' | "${mysql[@]}"
     fi
@@ -231,7 +244,7 @@ fi
 
 # Allow this to be run as normal mariadb too
 if [ "$BOOTSTRAP" = "on" ]; then
-  exec "$@" "--wsrep-new-cluster"
+  exec "$@" " --wsrep-new-cluster"
 else
   exec "$@"
 fi
