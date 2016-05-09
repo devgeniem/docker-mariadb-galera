@@ -56,7 +56,7 @@ GCONFIG=/etc/mysql/conf.d/cluster.cnf
 export NODE_ADDRESS=${NODE_ADDRESS:-$(get_ip)}
 export NODE_NAME=${NODE_NAME:-$(hostname)}
 export CLUSTER_NAME=${CLUSTER_NAME:-Galera}
-export SST_USER=${CLUSTER_NAME:-xtrabackup}
+export SST_USER=${SST_USER:-xtrabackup}
 
 # Replace configs
 sed -i "s|%%NODE_ADDRESS%%|$NODE_ADDRESS|g" $GCONFIG
@@ -174,6 +174,8 @@ if [ "$1" = 'mysqld' -a -z "$wantHelp" ]; then
       DELETE FROM mysql.user ;
       CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
       GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;
+      CREATE USER '${SST_USER}'@'%' IDENTIFIED BY '${SST_PASSWORD}' ;
+      GRANT ALL ON *.* TO '${SST_USER}'@'%' ;
       DROP DATABASE IF EXISTS test ;
       FLUSH PRIVILEGES ;
 EOSQL
@@ -182,24 +184,9 @@ EOSQL
       mysql+=( -p"${MYSQL_ROOT_PASSWORD}" )
     fi
 
-    # Create replicating user for xtrabackup
-    if [ "$REPL_PASSWORD" ]; then
-
-      export REPL_USER=${REPL_USER:-replicator} # Set default if $REPL_USER is not set
-
-      echo "CREATE USER '$REPL_USER'@'%' IDENTIFIED BY '$REPL_PASSWORD'; \
-            GRANT ALL ON *.* TO '$REPL_USER'@'%';" | "${mysql[@]}"
-
-    fi
-
     if [ "$MYSQL_DATABASE" ]; then
       echo "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` ;" | "${mysql[@]}"
       mysql+=( "$MYSQL_DATABASE" )
-    fi
-
-    if [ "$SST_USER" != "" ] && [ "$SST_PASSWORD" != "" ]; then
-      echo "CREATE USER '$SST_USER'@'%' IDENTIFIED BY '$SST_PASSWORD' ;" | "${mysql[@]}"
-      echo "GRANT ALL ON *.* TO '$SST_USER'@'%' ;" | "${mysql[@]}"
     fi
 
     if [ "$MYSQL_USER" -a "$MYSQL_PASSWORD" ]; then
@@ -208,11 +195,6 @@ EOSQL
       if [ "$MYSQL_DATABASE" ]; then
         echo "GRANT ALL ON \`$MYSQL_DATABASE\`.* TO '$MYSQL_USER'@'%' ;" | "${mysql[@]}"
       fi
-
-      # When using skip-name-resolve we will get unneccesary noise in logs:
-      # [Warning] 'proxies_priv' entry '@% root@076d53fc38aa' ignored in --skip-name-resolve mode.
-      # This removes all proxies_priv entries
-      echo 'TRUNCATE mysql.proxies_priv;' | "${mysql[@]}"
 
       echo 'FLUSH PRIVILEGES ;' | "${mysql[@]}"
     fi
@@ -239,12 +221,16 @@ EOSQL
   fi
 
   chown -R mysql:mysql "$DATADIR"
+
+  # Check that permissions are correct for xtrabackup
+  chown mysql:mysql /var/lib/mysql
+  chown mysql:mysql /var/log/mysql
   echo "Starting mysql process..."
 fi
 
 # Allow this to be run as normal mariadb too
-if [ "$BOOTSTRAP" = "on" ]; then
-  exec "$@" " --wsrep-new-cluster"
+if [ "$BOOTSTRAP" == "on" ]; then
+  exec "$@" --wsrep-new-cluster
 else
   exec "$@"
 fi

@@ -5,6 +5,7 @@ bootstrap:
     SST_USER: xtrabackup
     SST_PASSWORD: xtrabackup
     BOOTSTRAP: "on"
+    NODE_NAME: startup.db.test
 
 joiner:
   build: .
@@ -12,4 +13,5 @@ joiner:
     MYSQL_ROOT_PASSWORD: password
     SST_USER: xtrabackup
     SST_PASSWORD: xtrabackup
-    CLUSTER_MEMBERS: 172.17.0.19
+    CLUSTER_MEMBERS: 172.17.0.19,172.17.0.6
+    NODE_NAME: joiner.db.test

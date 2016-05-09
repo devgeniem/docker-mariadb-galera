@@ -3,8 +3,8 @@ FROM mariadb:10.1.13
 MAINTAINER Onni Hakala - Geniem Oy <onni.hakala@geniem.com>
 
 # Install percona xtrabackup
-RUN apt-get update && \
-    apt-get install xtrabackup && \
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
+    apt-get install xtrabackup -y && \
     rm -rf /var/cache/apk/*
 
 ADD root-files /
