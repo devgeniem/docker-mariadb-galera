@@ -37,6 +37,9 @@ thread_pool_size=24
 # Galera Provider Configuration
 wsrep_provider=/usr/lib/galera/libgalera_smm.so
 
+# With bigger gcache size we can use ist to recover instead of sst
+wsrep_provider_options="gcache.size = 1G"
+
 # Galera Cluster Configuration
 wsrep_cluster_name="%%CLUSTER_NAME%%"
 wsrep_cluster_address="gcomm://%%CLUSTER_MEMBERS%%"
